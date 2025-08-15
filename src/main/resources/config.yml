@@ -1,0 +1,28 @@
+# SimpleDeathFinder – gibt beim Respawn einen Bergungskompass und entfernt ihn,
+# wenn der Spieler die Todesstelle erreicht.
+
+give-on-respawn: true
+
+remove-on-approach:
+  enabled: true
+  radius: 5.0       # in Blöcken
+  check-interval-ticks: 20  # 20 = 1 Sekunde
+
+# Beim Geben eines neuen Kompasses alte, von diesem Plugin getaggte Kompasse entfernen
+remove-old-compasses: true
+
+messages:
+  given: "&aBergungskompass erhalten. Er zeigt zu deiner letzten Todesstelle."
+  arrived: "&7Du bist an deiner Todesstelle angekommen. Der Kompass zerfällt."
+  full-inventory: "&eInventar voll – Kompass wurde vor dir gedroppt."
+  other-dimension: "&eDeine Todesstelle ist in einer anderen Dimension – der Kompass dreht sich."
+
+item:
+  name: "&bBergungskompass"
+  lore:
+    - "&7Zeigt zu deiner letzten Todesstelle."
+    - "&7Ort: &f{dim} &7@ &f{x}&7,&f{y}&7,&f{z}"
+
+sound:
+  arrived: "entity.experience_orb.pickup"   # beliebiger Bukkit-Soundname
+
