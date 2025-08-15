@@ -110,17 +110,6 @@ mvn -DskipTests package
 
 ---
 
-## 🔖 GitHub Badges
-
-Replace the placeholder `YOUR_GITHUB_USERNAME` (and repo name if different) at the top of this README:
-```
-https://github.com/YOUR_GITHUB_USERNAME/SimpleDeathFinder/actions/workflows/build.yml/badge.svg
-https://img.shields.io/github/v/release/YOUR_GITHUB_USERNAME/SimpleDeathFinder?sort=semver
-https://img.shields.io/github/downloads/YOUR_GITHUB_USERNAME/SimpleDeathFinder/total.svg
-```
-
----
-
 ## 📜 Changelog
 
 **1.0.0**
