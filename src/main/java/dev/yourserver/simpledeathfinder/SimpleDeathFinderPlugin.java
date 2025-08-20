@@ -1,9 +1,13 @@
 package dev.yourserver.simpledeathfinder;
 
+import dev.yourserver.simpledeathfinder.path.DeathPathState;
+import dev.yourserver.simpledeathfinder.path.PathManager;
+import dev.yourserver.simpledeathfinder.path.PathMode;
 import org.bukkit.*;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.*;
 import org.bukkit.event.entity.PlayerDeathEvent;
@@ -17,6 +21,9 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class SimpleDeathFinderPlugin extends JavaPlugin implements Listener {
@@ -41,9 +48,13 @@ public class SimpleDeathFinderPlugin extends JavaPlugin implements Listener {
     // Checker Task
     private int taskId = -1;
 
+    // NEU: Pfadmanager
+    private PathManager pathManager;
+
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        ensureConfigDefaults();   // ergänzt neue Keys aus der JAR-config.yml
         loadCfg();
 
         KEY_TAG = new NamespacedKey(this, "sdf");
@@ -54,6 +65,10 @@ public class SimpleDeathFinderPlugin extends JavaPlugin implements Listener {
 
         Bukkit.getPluginManager().registerEvents(this, this);
 
+        // PathManager initialisieren + starten
+        pathManager = new PathManager(this, KEY_TAG, KEY_W, KEY_X, KEY_Y, KEY_Z);
+        pathManager.start();
+
         startChecker();
         getLogger().info("SimpleDeathFinder aktiviert.");
     }
@@ -61,6 +76,29 @@ public class SimpleDeathFinderPlugin extends JavaPlugin implements Listener {
     @Override
     public void onDisable() {
         stopChecker();
+        if (pathManager != null) pathManager.stop();
+    }
+
+    /** Merged neue Default-Keys in bestehende config.yml (ohne Werte zu überschreiben). */
+    private void ensureConfigDefaults() {
+        // Stellt sicher, dass eine Datei existiert
+        saveDefaultConfig();
+        try (InputStream in = getResource("config.yml")) {
+            if (in == null) {
+                getLogger().warning("config.yml nicht im JAR gefunden – Defaults können nicht gemerged werden.");
+                return;
+            }
+            YamlConfiguration defaults = YamlConfiguration.loadConfiguration(new InputStreamReader(in, StandardCharsets.UTF_8));
+
+            FileConfiguration cfg = getConfig();
+            cfg.addDefaults(defaults);
+            cfg.options().copyDefaults(true);
+
+            saveConfig();
+            reloadConfig();
+        } catch (Exception ex) {
+            getLogger().warning("Konnte Defaults nicht in config.yml mergen: " + ex.getMessage());
+        }
     }
 
     private void loadCfg() {
@@ -96,14 +134,18 @@ public class SimpleDeathFinderPlugin extends JavaPlugin implements Listener {
     @EventHandler (priority = EventPriority.MONITOR)
     public void onRespawn(PlayerRespawnEvent e) {
         final Player p = e.getPlayer();
-        if (!giveOnRespawn) return;
-
         Bukkit.getScheduler().runTask(this, () -> {
             Location death = lastDeathLocation.get(p.getUniqueId());
-            // Falls wir die Death-Position aus irgendeinem Grund nicht haben:
+
+            // Pfad-Ziel setzen + Sichtbarkeit gemäß Config
+            if (death != null && pathManager != null) {
+                pathManager.setTargetFromDeath(p, death);
+            }
+
+            if (!giveOnRespawn) return;
+
+            // Kompass geben (mit getaggtem Ziel)
             if (death == null) {
-                // Vanilla speichert sie selbst – der Recovery Compass zeigt dennoch korrekt (gleiche Dimension).
-                // Wir geben ihn trotzdem, nur ohne Lore-Koordinaten.
                 giveCompass(p, null);
             } else {
                 giveCompass(p, death);
@@ -111,11 +153,9 @@ public class SimpleDeathFinderPlugin extends JavaPlugin implements Listener {
         });
     }
 
-    // Optional: Falls ein Spieler nach Serverneustart joint und vorher gestorben war
     @EventHandler (priority = EventPriority.MONITOR)
     public void onJoin(PlayerJoinEvent e) {
-        // nichts weiter – wir verlassen uns auf onDeath→onRespawn
-        // (Der Recovery Compass funktioniert ohnehin mit Vanilla-Deathpos)
+        // bewusst leer gelassen
     }
 
     // --- Kompass geben ---
@@ -135,10 +175,10 @@ public class SimpleDeathFinderPlugin extends JavaPlugin implements Listener {
                 String dimName = prettyDim(death.getWorld());
                 for (int i = 0; i < lore.size(); i++) {
                     lore.set(i, lore.get(i)
-                        .replace("{dim}", dimName)
-                        .replace("{x}", String.valueOf(death.getBlockX()))
-                        .replace("{y}", String.valueOf(death.getBlockY()))
-                        .replace("{z}", String.valueOf(death.getBlockZ()))
+                            .replace("{dim}", dimName)
+                            .replace("{x}", String.valueOf(death.getBlockX()))
+                            .replace("{y}", String.valueOf(death.getBlockY()))
+                            .replace("{z}", String.valueOf(death.getBlockZ()))
                     );
                 }
                 PersistentDataContainer pdc = meta.getPersistentDataContainer();
@@ -221,6 +261,12 @@ public class SimpleDeathFinderPlugin extends JavaPlugin implements Listener {
                             p.playSound(p.getLocation(), s, 1f, 1f);
                         } catch (IllegalArgumentException ignored) {}
 
+                        // Pfad für den Spieler ausblenden
+                        if (pathManager != null) {
+                            pathManager.state(p).visible = false;
+                            pathManager.state(p).clearPath();
+                        }
+
                         break; // pro Tick nur einen entfernen
                     }
                 }
@@ -273,27 +319,59 @@ public class SimpleDeathFinderPlugin extends JavaPlugin implements Listener {
 
     @Override
     public boolean onCommand(CommandSender s, Command cmd, String label, String[] args) {
-        if (!cmd.getName().equalsIgnoreCase("sdf")) return false;
+        if (cmd.getName().equalsIgnoreCase("sdf")) {
+            if (args.length == 1 && args[0].equalsIgnoreCase("reload")) {
+                if (!s.hasPermission("simpledeathfinder.reload")) { s.sendMessage("§cKeine Berechtigung."); return true; }
+                reloadConfig();
+                ensureConfigDefaults();   // ergänzt neue Keys bei Reload
+                loadCfg();
+                if (pathManager != null) { pathManager.stop(); pathManager.start(); }
+                startChecker();
+                s.sendMessage("§aSimpleDeathFinder neu geladen.");
+                return true;
+            }
 
-        if (args.length == 1 && args[0].equalsIgnoreCase("reload")) {
-            if (!s.hasPermission("simpledeathfinder.reload")) { s.sendMessage("§cKeine Berechtigung."); return true; }
-            reloadConfig(); loadCfg(); startChecker();
-            s.sendMessage("§aSimpleDeathFinder neu geladen.");
+            if (args.length == 2 && args[0].equalsIgnoreCase("give")) {
+                if (!s.hasPermission("simpledeathfinder.give")) { s.sendMessage("§cKeine Berechtigung."); return true; }
+                Player t = Bukkit.getPlayerExact(args[1]);
+                if (t == null) { s.sendMessage("§cSpieler nicht gefunden."); return true; }
+                giveCompass(t, lastDeathLocation.get(t.getUniqueId()));
+                s.sendMessage("§aKompass an " + t.getName() + " gegeben.");
+                return true;
+            }
+
+            s.sendMessage("§7/sdf reload §8| §7/sdf give <player>");
             return true;
         }
 
-        if (args.length == 2 && args[0].equalsIgnoreCase("give")) {
-            if (!s.hasPermission("simpledeathfinder.give")) { s.sendMessage("§cKeine Berechtigung."); return true; }
-            Player t = Bukkit.getPlayerExact(args[1]);
-            if (t == null) { s.sendMessage("§cSpieler nicht gefunden."); return true; }
-            // ohne gespeicherte Deathpos – Vanilla zeigt trotzdem korrekt an (sofern vorhanden)
-            giveCompass(t, lastDeathLocation.get(t.getUniqueId()));
-            s.sendMessage("§aKompass an " + t.getName() + " gegeben.");
+        if (cmd.getName().equalsIgnoreCase("deathpath")) {
+            if (!(s instanceof Player)) { s.sendMessage("§cNur Ingame."); return true; }
+            Player p = (Player) s;
+            if (!p.hasPermission("simpledeathfinder.path")) { p.sendMessage("§cKeine Berechtigung."); return true; }
+            DeathPathState st = pathManager.state(p);
+
+            if (args.length == 0 || args[0].equalsIgnoreCase("status")) {
+                p.sendMessage("§7Pfad: " + (st.visible ? "§aAN" : "§cAUS") + " §8| §7Modus: §f" + st.mode);
+                return true;
+            }
+            if (args[0].equalsIgnoreCase("on")) {
+                st.visible = true;  p.sendMessage(color(getConfig().getString("messages.path-on"))); return true;
+            }
+            if (args[0].equalsIgnoreCase("off")) {
+                st.visible = false; p.sendMessage(color(getConfig().getString("messages.path-off"))); return true;
+            }
+            if (args[0].equalsIgnoreCase("mode")) {
+                if (args.length < 2) { p.sendMessage("§7/deathpath mode <foot|boat>"); return true; }
+                PathMode m = PathMode.fromString(args[1]);
+                st.mode = m;
+                st.clearPath();
+                p.sendMessage("§7Modus gesetzt: §f" + m);
+                return true;
+            }
+            p.sendMessage("§7/deathpath [on|off|mode <foot|boat>|status]");
             return true;
         }
 
-        s.sendMessage("§7/sdf reload §8| §7/sdf give <player>");
-        return true;
+        return false;
     }
 }
-
