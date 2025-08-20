@@ -9,11 +9,13 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.block.Action;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.*;
@@ -99,14 +101,16 @@ public class PathManager implements Listener {
                     if (st == null) continue;
                     if (!st.visible) continue;
 
-                    // Dimension check
-                    if (st.target == null) continue;
+                    if (st.target == null) {
+                        p.sendActionBar(colorize(plugin.getConfig().getString("messages.path-no-target")));
+                        continue;
+                    }
                     if (!sameWorld(p.getWorld(), st.target.getWorld())) {
-                        p.sendActionBar(mm(plugin.getConfig().getString("messages.path-different-world")));
+                        p.sendActionBar(colorize(plugin.getConfig().getString("messages.path-different-world")));
                         continue;
                     }
 
-                    // Modus Auto‑Boot
+                    // Auto-Boat-Erkennung
                     if (autoBoatMode && p.isInsideVehicle() && p.getVehicle() instanceof Boat) {
                         if (st.mode != PathMode.BOAT) { st.mode = PathMode.BOAT; st.clearPath(); }
                     }
@@ -121,7 +125,7 @@ public class PathManager implements Listener {
                     }
                 }
             }
-        }.runTaskTimer(plugin, 40L, 2L).getTaskId(); // sehr fein getaktet; intern gedrosselt
+        }.runTaskTimer(plugin, 40L, 2L).getTaskId();
     }
 
     public void stop() {
@@ -135,19 +139,19 @@ public class PathManager implements Listener {
         return a != null && b != null && a.getUID().equals(b.getUID());
     }
 
-    private Component mm(String legacy) {
-        return Component.text(ChatColor.translateAlternateColorCodes('&', legacy == null ? "" : legacy));
+    private String colorize(String s) {
+        return ChatColor.translateAlternateColorCodes('&', s == null ? "" : s);
     }
 
     // === Player-Interaction: Rechtsklick auf Recovery-Compass ===
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onInteract(PlayerInteractEvent e) {
         if (e.getHand() == EquipmentSlot.OFF_HAND) return;
-        if (e.getItem() == null || e.getItem().getType() != Material.RECOVERY_COMPASS) return;
-        if (!e.getAction().isRightClick()) return;
-
-        // Nur unsere getaggten Kompasse
-        if (!isTaggedCompass(e.getItem())) return;
+        Action a = e.getAction();
+        if (a != Action.RIGHT_CLICK_AIR && a != Action.RIGHT_CLICK_BLOCK) return;
+        ItemStack stack = e.getItem();
+        if (stack == null || stack.getType() != Material.RECOVERY_COMPASS) return;
+        if (!isTaggedCompass(stack)) return;
 
         Player p = e.getPlayer();
         DeathPathState st = state(p);
@@ -156,17 +160,19 @@ public class PathManager implements Listener {
             // Modus toggeln
             st.mode = (st.mode == PathMode.FOOT ? PathMode.BOAT : PathMode.FOOT);
             st.clearPath();
-            p.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    st.mode == PathMode.FOOT ?
-                            plugin.getConfig().getString("messages.path-mode-foot") :
-                            plugin.getConfig().getString("messages.path-mode-boat")));
+            p.sendMessage(colorize(
+                st.mode == PathMode.FOOT ?
+                    plugin.getConfig().getString("messages.path-mode-foot") :
+                    plugin.getConfig().getString("messages.path-mode-boat")
+            ));
         } else {
             // Sichtbarkeit toggeln
             st.visible = !st.visible;
-            p.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    st.visible ?
-                            plugin.getConfig().getString("messages.path-on") :
-                            plugin.getConfig().getString("messages.path-off")));
+            p.sendMessage(colorize(
+                st.visible ?
+                    plugin.getConfig().getString("messages.path-on") :
+                    plugin.getConfig().getString("messages.path-off")
+            ));
         }
     }
 
@@ -183,7 +189,6 @@ public class PathManager implements Listener {
     private void render(Player p, DeathPathState st) {
         if (st.currentPath.isEmpty()) return;
 
-        // Partikel entlang des Pfads
         Particle.DustOptions dust = null;
         if (particleType == Particle.REDSTONE) {
             dust = new Particle.DustOptions(Color.fromRGB(60, 200, 255), particleSize);
@@ -199,10 +204,10 @@ public class PathManager implements Listener {
             acc += segLen;
             if (acc >= particleSpacing) {
                 Location loc = step.clone().add(0.5, 0.1, 0.5);
-                if (particleType == Particle.REDSTONE) {
+                if (dust != null) {
                     p.spawnParticle(Particle.REDSTONE, loc, 1, dust);
                 } else {
-                    p.spawnParticle(particleType, loc, 1, 0,0,0, 0.0);
+                    p.spawnParticle(particleType, loc, 1, 0, 0, 0, 0.0);
                 }
                 acc = 0.0;
             }
@@ -213,14 +218,13 @@ public class PathManager implements Listener {
             last = step;
         }
 
-        // Distanzanzeige
         double dist = p.getLocation().distance(st.target);
-        p.sendActionBar(Component.text(ChatColor.AQUA + "Ziel: " + (int)dist + "m  [" + st.mode + "]"));
+        p.sendActionBar(ChatColor.AQUA + "Ziel: " + (int) dist + "m  [" + st.mode + "]");
     }
 
     // === Inkrementelles A*: von Spielerposition Richtung target bis segmentLen ===
     private void computeSegment(Player p, DeathPathState st) {
-        Location start = surfaceStandable(p.getLocation());
+        Location start = surfaceStandable(p.getLocation(), st.mode);
         Location goal  = st.target;
 
         if (start == null || goal == null) return;
@@ -236,19 +240,30 @@ public class PathManager implements Listener {
         }
     }
 
-    private Location surfaceStandable(Location base) {
+    private Location surfaceStandable(Location base, PathMode mode) {
         World w = base.getWorld();
         int x = base.getBlockX();
         int z = base.getBlockZ();
-        int y = Math.min(255, base.getBlockY() + 2);
 
-        // Suche kleine Korrektur nach unten für Stehhöhe
-        for (int dy = 2; dy >= -3; dy--) {
-            int yy = base.getBlockY() + dy;
-            if (yy < w.getMinHeight() + 1 || yy > w.getMaxHeight() - 2) continue;
-            if (isStandable(w, x, yy, z)) return new Location(w, x, yy, z);
+        if (mode == PathMode.BOAT) {
+            // Y in der Nähe suchen, wo Boot fahren kann (Wasser + Luft darüber)
+            int by = base.getBlockY();
+            for (int dy = 2; dy >= -3; dy--) {
+                int yy = by + dy;
+                if (yy < w.getMinHeight() + 1 || yy > w.getMaxHeight() - 2) continue;
+                if (isBoatPass(w, x, yy, z)) return new Location(w, x, yy, z);
+            }
+            return null;
+        } else {
+            // Fußgänger: Standposition suchen
+            int by = base.getBlockY();
+            for (int dy = 2; dy >= -3; dy--) {
+                int yy = by + dy;
+                if (yy < w.getMinHeight() + 1 || yy > w.getMaxHeight() - 2) continue;
+                if (isStandable(w, x, yy, z)) return new Location(w, x, yy, z);
+            }
+            return null;
         }
-        return null;
     }
 
     private boolean isStandable(World w, int x, int y, int z) {
@@ -306,7 +321,6 @@ public class PathManager implements Listener {
             closed.add(cur.key());
             expanded++;
 
-            // Abbruch: Segmentlänge oder Nähe zum Ziel
             double distToGoal = Math.abs(cur.x - gx) + Math.abs(cur.z - gz) + Math.abs(cur.y - gy) * 0.5;
             if (distToGoal < 3) { best = cur; break; }
             if (cur.prev != null) {
@@ -317,17 +331,12 @@ public class PathManager implements Listener {
             for (int[] d : DIRS) {
                 int nx = cur.x + d[0];
                 int nz = cur.z + d[1];
-                // y-Korrektur (kleine Höhenwechsel zulassen)
+                // kleine Höhenwechsel zulassen
                 for (int dy = 1; dy >= -1; dy--) {
                     int ny = cur.y + dy;
                     if (ny < w.getMinHeight() + 1 || ny > w.getMaxHeight() - 2) continue;
 
-                    boolean pass;
-                    if (mode == PathMode.FOOT) {
-                        pass = isStandable(w, nx, ny, nz);
-                    } else {
-                        pass = isBoatPass(w, nx, ny, nz);
-                    }
+                    boolean pass = (mode == PathMode.FOOT) ? isStandable(w, nx, ny, nz) : isBoatPass(w, nx, ny, nz);
                     if (!pass) continue;
 
                     double step = (d[0] == 0 || d[1] == 0) ? 1.0 : 1.4142;
