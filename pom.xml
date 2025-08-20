@@ -28,5 +28,14 @@
       <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
     </repository>
   </repositories>
-</project>
 
+  <build>
+    <resources>
+      <!-- Filter plugin.yml, damit ${project.version} ersetzt wird -->
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+      </resource>
+    </resources>
+  </build>
+</project>
