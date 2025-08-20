@@ -1,49 +1,36 @@
-# SimpleDeathFinder – gibt beim Respawn einen Bergungskompass und entfernt ihn,
-# wenn der Spieler die Todesstelle erreicht.
+# SimpleDeathFinder – gives a Recovery Compass on respawn and removes it
+# when the player reaches the death location.
 
-give-on-respawn: true
+give-on-respawn: true          # give one on respawn (optional)
 
 remove-on-approach:
   enabled: true
-  radius: 5.0                 # in Blöcken
-  check-interval-ticks: 20    # 20 = 1 Sekunde
+  radius: 6.0                 # blocks
+  check-interval-ticks: 20    # 20 = 1 second
 
-# Beim Geben eines neuen Kompasses alte, von diesem Plugin getaggte Kompasse entfernen
-remove-old-compasses: true
+# Keep older compasses tagged by this plugin when giving a new one
+# (must be false so you can keep multiple active targets)
+remove-old-compasses: false
 
 messages:
-  given: "&aBergungskompass erhalten. Er zeigt zu deiner letzten Todesstelle."
-  arrived: "&7Du bist an deiner Todesstelle angekommen. Der Kompass zerfällt."
-  full-inventory: "&eInventar voll – Kompass wurde vor dir gedroppt."
-  other-dimension: "&eDeine Todesstelle ist in einer anderen Dimension – der Kompass dreht sich."
-  path-on: "&aPfad-Visualisierung: AN"
-  path-off: "&7Pfad-Visualisierung: AUS"
-  path-mode-foot: "&bPfadmodus: &fzu Fuß"
-  path-mode-boat: "&bPfadmodus: &fBoot"
-  path-different-world: "&eZiel liegt in einer anderen Dimension – kein Pfad."
-  path-no-target: "&eKein Todesziel verfügbar."
+  # Item messages
+  given: "&aReceived recovery compass. It points to your last death."
+  arrived: "&7You reached your death location. The compass crumbles."
+  full-inventory: "&eInventory full – the compass was dropped in front of you."
+  other-dimension: "&eYour death location is in another dimension – the compass spins."
+
+  # ActionBar status (shown only while holding a tagged Recovery Compass)
+  # placeholders: {dist},{x},{y},{z},{dim},{owner}
+  path-status: "&bTarget:&f {dist}m &7(&f{dim} @ {x},{y},{z}&7)"
+  path-different-world: "&eTarget is in another dimension – no distance."
+  path-no-target: "&eNo death target available."
 
 item:
-  name: "&bBergungskompass"
+  name: "&bRecovery Compass"
   lore:
-    - "&7Zeigt zu deiner letzten Todesstelle."
-    - "&7Ort: &f{dim} &7@ &f{x}&7,&f{y}&7,&f{z}"
+    - "&7Points to your last death."
+    - "&7Where: &f{dim} &7@ &f{x}&7,&f{y}&7,&f{z}"
+    - "&7Owner: &f{owner}"
 
 sound:
-  arrived: "entity.experience_orb.pickup"   # beliebiger Bukkit-Soundname
-
-# === NEU: Todespfad-Visualisierung ===
-path:
-  enabled-by-default: true          # Standardmäßig nach Respawn aktivieren
-  render-interval-ticks: 10         # wie oft Partikel gezeichnet werden
-  recompute-interval-ticks: 20      # minimaler Abstand zwischen Neu-Berechnungen
-  segment-length: 96                 # Pfad in Blöcken pro Rechenlauf (Streaming)
-  max-search-nodes: 6000            # A*-Kappung pro Segment (Performance)
-  auto-boat-mode: true              # falls Spieler in Boot sitzt -> BOAT
-  particle:
-    spacing-blocks: 1.0             # Partikeldichte entlang des Pfads
-    type: REDSTONE                  # REDSTONE = DustOptions nutzbar
-    size: 1.1
-  waypoint:
-    every-blocks: 12
-    particle: END_ROD
+  arrived: "entity.experience_orb.pickup"   # any valid Bukkit sound
