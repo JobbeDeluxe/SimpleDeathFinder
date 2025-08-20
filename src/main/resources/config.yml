@@ -5,8 +5,8 @@ give-on-respawn: true
 
 remove-on-approach:
   enabled: true
-  radius: 5.0       # in Blöcken
-  check-interval-ticks: 20  # 20 = 1 Sekunde
+  radius: 5.0                 # in Blöcken
+  check-interval-ticks: 20    # 20 = 1 Sekunde
 
 # Beim Geben eines neuen Kompasses alte, von diesem Plugin getaggte Kompasse entfernen
 remove-old-compasses: true
@@ -16,6 +16,12 @@ messages:
   arrived: "&7Du bist an deiner Todesstelle angekommen. Der Kompass zerfällt."
   full-inventory: "&eInventar voll – Kompass wurde vor dir gedroppt."
   other-dimension: "&eDeine Todesstelle ist in einer anderen Dimension – der Kompass dreht sich."
+  path-on: "&aPfad-Visualisierung: AN"
+  path-off: "&7Pfad-Visualisierung: AUS"
+  path-mode-foot: "&bPfadmodus: &fzu Fuß"
+  path-mode-boat: "&bPfadmodus: &fBoot"
+  path-different-world: "&eZiel liegt in einer anderen Dimension – kein Pfad."
+  path-no-target: "&eKein Todesziel verfügbar."
 
 item:
   name: "&bBergungskompass"
@@ -26,3 +32,18 @@ item:
 sound:
   arrived: "entity.experience_orb.pickup"   # beliebiger Bukkit-Soundname
 
+# === NEU: Todespfad-Visualisierung ===
+path:
+  enabled-by-default: true          # Standardmäßig nach Respawn aktivieren
+  render-interval-ticks: 10         # wie oft Partikel gezeichnet werden
+  recompute-interval-ticks: 20      # minimaler Abstand zwischen Neu-Berechnungen
+  segment-length: 96                 # Pfad in Blöcken pro Rechenlauf (Streaming)
+  max-search-nodes: 6000            # A*-Kappung pro Segment (Performance)
+  auto-boat-mode: true              # falls Spieler in Boot sitzt -> BOAT
+  particle:
+    spacing-blocks: 1.0             # Partikeldichte entlang des Pfads
+    type: REDSTONE                  # REDSTONE = DustOptions nutzbar
+    size: 1.1
+  waypoint:
+    every-blocks: 12
+    particle: END_ROD
