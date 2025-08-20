@@ -20,6 +20,10 @@ import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.*;
 
+// Spigot-ActionBar (kein Paper):
+import net.md_5.bungee.api.ChatMessageType;
+import net.md_5.bungee.api.chat.TextComponent;
+
 public class PathManager implements Listener {
 
     private final JavaPlugin plugin;
@@ -33,6 +37,7 @@ public class PathManager implements Listener {
     private final int maxNodes;
     private final boolean autoBoatMode;
     private final Particle particleType;
+    private final boolean particleIsDustLike; // REDSTONE/DUST kompatibel
     private final double particleSpacing;
     private final float particleSize;
     private final Particle waypointParticle;
@@ -54,21 +59,47 @@ public class PathManager implements Listener {
         maxNodes          = Math.max(1000, c.getInt("path.max-search-nodes", 6000));
         autoBoatMode      = c.getBoolean("path.auto-boat-mode", true);
 
-        particleType      = parseParticle(c.getString("path.particle.type", "REDSTONE"));
+        // Particle robust parsen (REDSTONE oder DUST)
+        particleType      = parseParticleCompat(c.getString("path.particle.type", "REDSTONE"));
+        particleIsDustLike = isDustLike(particleType);
         particleSpacing   = Math.max(0.2, c.getDouble("path.particle.spacing-blocks", 1.0));
         particleSize      = (float) Math.max(0.2, c.getDouble("path.particle.size", 1.1));
-        waypointParticle  = parseParticle(c.getString("path.waypoint.particle", "END_ROD"));
+        waypointParticle  = parseParticleCompat(c.getString("path.waypoint.particle", "END_ROD"));
         waypointEvery     = Math.max(6, c.getInt("path.waypoint.every-blocks", 12));
 
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
-    private Particle parseParticle(String s) {
-        try {
-            return Particle.valueOf(s.toUpperCase(Locale.ROOT));
-        } catch (Exception e) {
-            return Particle.END_ROD;
+    private Particle parseParticleCompat(String s) {
+        // 1) Versuch: wie angegeben
+        Particle p = tryParticle(s);
+        if (p != null) return p;
+        // 2) Fallbacks für REDSTONE <-> DUST
+        if ("REDSTONE".equalsIgnoreCase(s)) {
+            p = tryParticle("DUST");
+            if (p != null) return p;
         }
+        if ("DUST".equalsIgnoreCase(s)) {
+            p = tryParticle("REDSTONE");
+            if (p != null) return p;
+        }
+        // 3) Letzter Fallback
+        p = tryParticle("END_ROD");
+        return (p != null) ? p : Particle.FLAME;
+    }
+
+    private Particle tryParticle(String name) {
+        if (name == null) return null;
+        try {
+            return Particle.valueOf(name.toUpperCase(Locale.ROOT));
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private boolean isDustLike(Particle p) {
+        String n = p.name();
+        return n.equalsIgnoreCase("REDSTONE") || n.equalsIgnoreCase("DUST");
     }
 
     public DeathPathState state(Player p) {
@@ -102,11 +133,11 @@ public class PathManager implements Listener {
                     if (!st.visible) continue;
 
                     if (st.target == null) {
-                        p.sendActionBar(colorize(plugin.getConfig().getString("messages.path-no-target")));
+                        sendActionBar(p, colorize(plugin.getConfig().getString("messages.path-no-target")));
                         continue;
                     }
                     if (!sameWorld(p.getWorld(), st.target.getWorld())) {
-                        p.sendActionBar(colorize(plugin.getConfig().getString("messages.path-different-world")));
+                        sendActionBar(p, colorize(plugin.getConfig().getString("messages.path-different-world")));
                         continue;
                     }
 
@@ -141,6 +172,13 @@ public class PathManager implements Listener {
 
     private String colorize(String s) {
         return ChatColor.translateAlternateColorCodes('&', s == null ? "" : s);
+    }
+
+    // Spigot-kompatible ActionBar
+    private void sendActionBar(Player p, String legacyColored) {
+        // Legacy (§-Farbcodes) in TextComponents umwandeln:
+        TextComponent[] comps = TextComponent.fromLegacyText(legacyColored);
+        p.spigot().sendMessage(ChatMessageType.ACTION_BAR, comps);
     }
 
     // === Player-Interaction: Rechtsklick auf Recovery-Compass ===
@@ -190,7 +228,8 @@ public class PathManager implements Listener {
         if (st.currentPath.isEmpty()) return;
 
         Particle.DustOptions dust = null;
-        if (particleType == Particle.REDSTONE) {
+        if (particleIsDustLike) {
+            // DustOptions funktionieren für REDSTONE/DUST
             dust = new Particle.DustOptions(Color.fromRGB(60, 200, 255), particleSize);
         }
 
@@ -204,8 +243,8 @@ public class PathManager implements Listener {
             acc += segLen;
             if (acc >= particleSpacing) {
                 Location loc = step.clone().add(0.5, 0.1, 0.5);
-                if (dust != null) {
-                    p.spawnParticle(Particle.REDSTONE, loc, 1, dust);
+                if (particleIsDustLike && dust != null) {
+                    p.spawnParticle(particleType, loc, 1, dust);
                 } else {
                     p.spawnParticle(particleType, loc, 1, 0, 0, 0, 0.0);
                 }
@@ -219,7 +258,7 @@ public class PathManager implements Listener {
         }
 
         double dist = p.getLocation().distance(st.target);
-        p.sendActionBar(ChatColor.AQUA + "Ziel: " + (int) dist + "m  [" + st.mode + "]");
+        sendActionBar(p, ChatColor.AQUA + "Ziel: " + (int) dist + "m  [" + st.mode + "]");
     }
 
     // === Inkrementelles A*: von Spielerposition Richtung target bis segmentLen ===
