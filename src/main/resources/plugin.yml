@@ -1,13 +1,19 @@
 name: SimpleDeathFinder
 main: dev.yourserver.simpledeathfinder.SimpleDeathFinderPlugin
-version: 1.0.0
+version: ${project.version}
 api-version: '1.20'
 author: yourserver
+
 commands:
   sdf:
     description: SimpleDeathFinder commands
     usage: /sdf [reload|give <player>]
     permission: simpledeathfinder.use
+  deathpath:
+    description: Toggle/Mode der Todespfad-Visualisierung
+    usage: /deathpath [on|off|mode <foot|boat>|status]
+    permission: simpledeathfinder.path
+
 permissions:
   simpledeathfinder.use:
     default: true
@@ -15,4 +21,5 @@ permissions:
     default: op
   simpledeathfinder.give:
     default: op
-
+  simpledeathfinder.path:
+    default: true
