@@ -31,7 +31,7 @@
 
   <build>
     <resources>
-      <!-- Filter plugin.yml, damit ${project.version} ersetzt wird -->
+      <!-- Filter plugin.yml, damit ${project.version} aus der POM injiziert wird -->
       <resource>
         <directory>src/main/resources</directory>
         <filtering>true</filtering>
@@ -39,4 +39,3 @@
     </resources>
   </build>
 </project>
-
