@@ -9,10 +9,6 @@ commands:
     description: SimpleDeathFinder commands
     usage: /sdf [reload|give <player>]
     permission: simpledeathfinder.use
-  deathpath:
-    description: Toggle/Modus für die Todespfad-Visualisierung
-    usage: /deathpath [on|off|mode <foot|boat>|status]
-    permission: simpledeathfinder.path
 
 permissions:
   simpledeathfinder.use:
@@ -21,5 +17,3 @@ permissions:
     default: op
   simpledeathfinder.give:
     default: op
-  simpledeathfinder.path:
-    default: true
