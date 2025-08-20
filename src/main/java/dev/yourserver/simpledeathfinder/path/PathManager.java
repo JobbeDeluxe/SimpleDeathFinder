@@ -22,6 +22,7 @@ import java.util.*;
 
 // Spigot-ActionBar (kein Paper):
 import net.md_5.bungee.api.ChatMessageType;
+import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.TextComponent;
 
 public class PathManager implements Listener {
@@ -176,10 +177,9 @@ public class PathManager implements Listener {
 
     // Spigot-kompatible ActionBar
     private void sendActionBar(Player p, String legacyColored) {
-        // Legacy (§-Farbcodes) in TextComponents umwandeln:
-        TextComponent[] comps = TextComponent.fromLegacyText(legacyColored);
-        p.spigot().sendMessage(ChatMessageType.ACTION_BAR, comps);
-    }
+    BaseComponent[] comps = TextComponent.fromLegacyText(legacyColored);
+    p.spigot().sendMessage(ChatMessageType.ACTION_BAR, comps);
+}
 
     // === Player-Interaction: Rechtsklick auf Recovery-Compass ===
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
