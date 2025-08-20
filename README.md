@@ -19,6 +19,11 @@ A lightweight Paper/Spigot plugin that gives players a **Recovery Compass** on *
 - Friendly messages for **different dimension** cases (vanilla: compass spins)
 - Lightweight **periodic check** (default: every 1 second)
 - Tested with **Paper/Spigot 1.20–1.21**, **Java 17+**
+- **NEW in v1.1.0:** configurable **distance display** in meters when holding the compass
+
+---
+
+![SimpleDeathFinder Info](https://github.com/JobbeDeluxe/SimpleDeathFinder/blob/main/info.png)
 
 ---
 
@@ -53,12 +58,13 @@ item:
   lore:
     - "&7Points to your last death location."
     - "&7Where: &f{dim} &7@ &f{x}&7,&f{y}&7,&f{z}"
+    - "&7Distance: &f{dist}m"   # new variable in v1.1.0
 
 sound:
   arrived: "entity.experience_orb.pickup"
 ```
 
-**Placeholders** in `item.lore`: `{dim}`, `{x}`, `{y}`, `{z}`
+**Placeholders** in `item.lore`: `{dim}`, `{x}`, `{y}`, `{z}`, `{dist}`
 
 ---
 
@@ -105,15 +111,20 @@ mvn -DskipTests package
 - The item is a **vanilla RECOVERY_COMPASS** tagged with PDC.
 - **Auto-removal**: at most **one** tagged compass is removed per check tick per player.
 - **Dimensions**: In a different dimension the compass spins (vanilla); we send a hint message.
-- **Geyser/Floodgate**: server‑side only; works fine for Bedrock players as well.
+- **Geyser/Floodgate**: server-side only; works fine for Bedrock players as well.
 - No console spam; only short messages on load/reload.
 
 ---
 
 ## 📜 Changelog
 
+**1.1.0**
+- Added: distance display (`{dist}`) in meters when holding the compass  
+- Config: new placeholder `{dist}` available in messages/lore  
+- Cleanup: removed path visualization, plugin stays simple  
+
 **1.0.0**
-- Initial release: compass on respawn, auto‑remove within radius, configurable messages/sound
+- Initial release: compass on respawn, auto-remove within radius, configurable messages/sound
 
 ---
 
